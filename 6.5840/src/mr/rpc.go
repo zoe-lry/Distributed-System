@@ -26,11 +26,13 @@ type ExampleReply struct {
 
 // Add your RPC definitions here.
 type TaskRequest struct {
-	X int
+	MachineId int
+
 }
 
 type TaskResponse struct {
 	FileName string
+	TaskNumber int
 }
 
 // Cook up a unique-ish UNIX-domain socket name
