@@ -39,6 +39,8 @@ func (c *Coordinator) GetTask(args *TaskRequest, reply *TaskResponse) error {
 			if (task.State == 0){
 				reply.FileName = task.FileName
 				reply.TaskNumber = taskNumber
+				reply.NReduce = c.NReduce
+				reply.Status = 0 // map
 				break
 			}
 		}

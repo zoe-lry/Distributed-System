@@ -26,12 +26,26 @@ func ihash(key string) int {
 // main/mrworker.go calls this function.
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
+	
+	args := TaskRequest{} // declare an argument structure.
+	reply := TaskResponse{} // declare a reply structure.
+
+	// send the RPC request, wait for the reply.
+	// the "Coordinator.GetTask" tells the
+	// receiving server that we'd like to call
+	// the GetTask() method of struct Coordinator.
+	CallGetTask(&args, &reply)
+
+	if reply.Status == 0 { 	// if the status is map
+		// Get the filename by calling the CallGetTask
+		kva := CallMap(mapf, reply.FileName, reply.NReduce)
+		WriteMapOutput(kva, reply.TaskNumber, reply.NReduce)
+
+	}
+	
 
 	// Your worker implementation here.
-	// Get the filename by calling the CallGetTask
-	filename := CallGetTask()
-	fmt.Printf("file Name %s\n", filename)
-	CallMap(mapf, filename)
+
 	// uncomment to send the Example RPC to the coordinator.
 	// CallExample()
 
@@ -66,30 +80,18 @@ func CallExample() {
 	}
 }
 
-// the RPC argument and reply types are defined in rpc.go.
-func CallGetTask() string {
-
-	// declare an argument structure.
-	args := TaskRequest{}
-
-	// declare a reply structure.
-	reply := TaskResponse{}
-
-	// send the RPC request, wait for the reply.
-	// the "Coordinator.GetTask" tells the
-	// receiving server that we'd like to call
-	// the GetTask() method of struct Coordinator.
+// // the RPC argument and reply types are defined in rpc.go.
+func CallGetTask(args *TaskRequest, reply *TaskResponse)  {
 	ok := call("Coordinator.GetTask", &args, &reply)
 	if ok {
 		fmt.Printf("reply.Name %s\n", reply.FileName)
-		return reply.FileName
 	} else {
 		fmt.Printf("call failed!\n")
-		return ""
 	}
+	
 }
 
-func CallMap(mapf func(string, string) []KeyValue, filename string, ) *[]KeyValue{
+func CallMap(mapf func(string, string) []KeyValue, filename string, nReduce int) []KeyValue{
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Fatalf("cannot open %v", filename)
@@ -102,13 +104,18 @@ func CallMap(mapf func(string, string) []KeyValue, filename string, ) *[]KeyValu
     // Call the map function
     kva := mapf(filename, string(content))
 
-    // // Print the contents of kva (slice of KeyValue structs)
-    // for _, kv := range kva {
-    //     fmt.Printf("Key: %s, Value: %s\n", kv.Key, kv.Value)
-    // }
-
     // Return the kva slice if needed
-    return &kva
+    return kva
+}
+
+// Create a 2D slice (slice of slices) to store key-value pairs for each reduce task
+func WriteMapOutput(kva []KeyValue, taskNumber int, nReduce int) [][] KeyValue {
+	buf := make ([][] KeyValue, nReduce)
+	for _, kv := range(kva){
+		bucket := ihash(kv.Key) % nReduce
+		buf[bucket] = append(buf[bucket], kv)
+	}
+	return buf
 }
 
 // send an RPC request to the coordinator, wait for the response.

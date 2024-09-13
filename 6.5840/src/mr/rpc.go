@@ -33,6 +33,8 @@ type TaskRequest struct {
 type TaskResponse struct {
 	FileName string
 	TaskNumber int
+	Status int // 0-map 1-reduce 2 no task
+	NReduce int
 }
 
 // Cook up a unique-ish UNIX-domain socket name
