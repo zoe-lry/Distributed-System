@@ -1,12 +1,14 @@
 package mr
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"io/ioutil"
 	"log"
 	"net/rpc"
 	"os"
+	"strconv"
 )
 
 // Map functions return a slice of KeyValue.
@@ -39,7 +41,11 @@ func Worker(mapf func(string, string) []KeyValue,
 	if reply.Status == 0 { 	// if the status is map
 		// Get the filename by calling the CallGetTask
 		kva := CallMap(mapf, reply.FileName, reply.NReduce)
-		WriteMapOutput(kva, reply.TaskNumber, reply.NReduce)
+		// split the Map into nReduce tasks
+		ok := WriteMapOutput(kva, reply.TaskNumber, reply.NReduce)
+		if ok {
+			reply.Status = 2
+		}
 
 	}
 	
@@ -91,6 +97,7 @@ func CallGetTask(args *TaskRequest, reply *TaskResponse)  {
 	
 }
 
+// read the file and turn into keyValue slice
 func CallMap(mapf func(string, string) []KeyValue, filename string, nReduce int) []KeyValue{
 	file, err := os.Open(filename)
 	if err != nil {
@@ -109,13 +116,34 @@ func CallMap(mapf func(string, string) []KeyValue, filename string, nReduce int)
 }
 
 // Create a 2D slice (slice of slices) to store key-value pairs for each reduce task
-func WriteMapOutput(kva []KeyValue, taskNumber int, nReduce int) [][] KeyValue {
+// for eacg keyValue, ihash number % nReduce
+// 
+func WriteMapOutput(kva []KeyValue, taskNumber int, nReduce int) bool {
 	buf := make ([][] KeyValue, nReduce)
 	for _, kv := range(kva){
 		bucket := ihash(kv.Key) % nReduce
 		buf[bucket] = append(buf[bucket], kv)
 	}
-	return buf
+	for no, kv_pairs := range(buf) {
+		mapOutputFilename := "mr-" + strconv.Itoa(taskNumber) + "-" + strconv.Itoa(no)
+		// Create a temp file named mr-map-random name
+		// Once the data is written, the temporary file is renamed to mr-X-Y to store the partitioned data for that reduce task.
+		// To ensure that nobody observes partially written files in the presence of crashes
+		tmpMapOutFile, error := os.CreateTemp("", "mr-map-*")
+		if error != nil {
+			log.Fatalf("Fail to open tmpMapOutFile.")
+		}
+		// encode the kv_pair to the temp file
+		enc := json.NewEncoder(tmpMapOutFile)
+		err := enc.Encode(kv_pairs)
+		if err != nil {
+			log.Fatalf("Fail to encode tmpMapOutFile.")
+			return false
+		}
+		tmpMapOutFile.Close()
+		os.Rename(tmpMapOutFile.Name(), mapOutputFilename)
+	}
+	return true
 }
 
 // send an RPC request to the coordinator, wait for the response.
