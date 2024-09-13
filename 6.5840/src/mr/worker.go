@@ -38,47 +38,48 @@ func ihash(key string) int {
 // main/mrworker.go calls this function.
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
+	machineId := 0
 	for {
 		// sleep one second before calling each task
 		time.Sleep(time.Second)
-		request := TaskRequest{} // declare an argument structure.
-		reply := TaskResponse{} // declare a reply structure.
+		request := TaskRequest{MachineId: machineId} // declare an argument structure.
+		response := TaskResponse{} // declare a reply structure.
 
 		// send the RPC request, wait for the reply.
 		// the "Coordinator.GetTask" tells the
 		// receiving server that we'd like to call
 		// the GetTask() method of struct Coordinator.
-		CallGetTask(&request, &reply)
+		CallGetTask(&request, &response)
+		machineId = response.MachineId
 
-		if reply.Status == 0 { 	//process Map
+		if response.Status == 0 { 	//process Map
 			// Get the filename by calling the CallGetTask
-			kva := CallMap(mapf, reply.FileName, reply.NReduce)
+			kva := CallMap(mapf, response.FileName, response.NReduce)
 			// split the Map into nReduce tasks
-			ok := WriteMapOutput(kva, reply.TaskNumber, reply.NReduce)
+			ok := WriteMapOutput(kva, response.TaskNumber, response.NReduce)
 			if ok {
 				// TODO  if the task didnt finish properly, reply to the coordinator?
 				// reply.Status = 2 
 			}
-		} else if (reply.Status ==  1) { // process reduce
+		} else if (response.Status ==  1) { // process reduce
 			// Call reduce plugin to complete 
-			 CallReduce(reducef, reply.TaskNumber, reply.NMap)
+			 CallReduce(reducef, response.TaskNumber, response.NMap)
 
 
-		} else if (reply.Status == 2) {
+		} else if (response.Status == 2) {
 
 		}
 		
 		// pass the task status and task number to corrdinator 
-		finishReply := FinishReply{Status: reply.Status, TaskNumber: reply.TaskNumber }
+		finishRquest := FinishReply{Status: response.Status, TaskNumber: response.TaskNumber }
 		finishResponse := FinishResponse{}
 		// call FinishTask in coordinator
-		CallFinishTask(&finishReply, &finishResponse)
+		CallFinishTask(&finishRquest, &finishResponse)
 		// get the overall status. if all tasks are done. break the loop
 		// otherwise call another task
-		if finishReply.Status == 2 {
+		if finishRquest.Status == 2 {
 			break
 		}
-
 	}
 	
 	// uncomment to send the Example RPC to the coordinator.
@@ -116,10 +117,10 @@ func CallExample() {
 }
 
 // the RPC argument and reply types are defined in rpc.go.
-func CallGetTask(args *TaskRequest, reply *TaskResponse)  {
-	ok := call("Coordinator.GetTask", &args, &reply)
+func CallGetTask(request *TaskRequest, response *TaskResponse)  {
+	ok := call("Coordinator.GetTask", &request, &response)
 	if ok {
-		fmt.Printf("GET TASK --- task type %v, filename %s\n", reply.Status, reply.FileName)
+		fmt.Printf("GET TASK ---Machine ID: %v,  task type %v, filename %s\n", response.MachineId, response.Status, response.FileName)
 	} else {
 		fmt.Printf("call failed!\n")
 	}

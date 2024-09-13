@@ -30,18 +30,24 @@ type Coordinator struct {
 }
 
 // Your code here -- RPC handlers for the worker to call.
-func (c *Coordinator) GetTask(args *TaskRequest, reply *TaskResponse) error {
-	// if (c.Done()) {
-	// 	return fmt.Errorf("no more tasks available, all tasks are completed")
-	// }
-	// if state == 0, assign map task
+func (c *Coordinator) GetTask(request *TaskRequest, response *TaskResponse) error {
+	c.Mu.Lock()
+	
+	// Assign a machine ID if not exist
+	if (request.MachineId == 0) {
+		c.MachineNum ++
+		response.MachineId = c.MachineNum
+	} else {
+		response.MachineId = request.MachineId
+	}
+
 	if c.Status == 0 {
 		for taskNumber, task := range(c.MapTasks) {
 			if (task.Status == 0){
-				reply.FileName = task.FileName
-				reply.TaskNumber = taskNumber
-				reply.NReduce = c.NReduce
-				reply.Status = 0 // 0 - Map task
+				response.FileName = task.FileName
+				response.TaskNumber = taskNumber
+				response.NReduce = c.NReduce
+				response.Status = 0 // 0 - Map task
 				task.Status = 1 // start Running
 				break
 			}
@@ -49,16 +55,16 @@ func (c *Coordinator) GetTask(args *TaskRequest, reply *TaskResponse) error {
 	}else if c.Status == 1 {
 		for taskNumber, task := range(c.ReduceTasks) {
 			if (task.Status == 0){
-				reply.FileName = task.FileName
-				reply.TaskNumber = taskNumber
-				reply.NMap = c.NMap
-				reply.Status = 1 	// 1- Reduce task
+				response.TaskNumber = taskNumber
+				response.NMap = c.NMap
+				response.Status = 1 	// 1- Reduce task
 				task.Status = 1 	// start Running
 				break
 			}
 		}
 	}
-	// fmt.Printf("reply.Name %s\n", reply.Name)
+
+	c.Mu.Unlock()
 	return nil
 }
 
@@ -100,9 +106,8 @@ func (c *Coordinator) UpdateStatus() {
 				return
 			}
 		}
+		c.Status = 2
 	} 
-	c.Status = 2
-
 }
 
 
