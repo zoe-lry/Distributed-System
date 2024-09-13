@@ -1,9 +1,11 @@
 package mr
 
-import "fmt"
-import "log"
-import "net/rpc"
-import "hash/fnv"
+import (
+	"fmt"
+	"hash/fnv"
+	"log"
+	"net/rpc"
+)
 
 // Map functions return a slice of KeyValue.
 type KeyValue struct {
@@ -24,11 +26,13 @@ func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	// Your worker implementation here.
-
+	CallGetTask()
 	// uncomment to send the Example RPC to the coordinator.
-	CallExample()
+	// CallExample()
 
 }
+
+
 
 // example function to show how to make an RPC call to the coordinator.
 //
@@ -57,13 +61,36 @@ func CallExample() {
 	}
 }
 
+// the RPC argument and reply types are defined in rpc.go.
+func CallGetTask() {
+
+	// declare an argument structure.
+	args := TaskRequest{}
+
+	// declare a reply structure.ç
+	reply := TaskResponse{}
+
+	// send the RPC request, wait for the reply.
+	// the "Coordinator.Example" tells the
+	// receiving server that we'd like to call
+	// the Example() method of struct Coordinator.
+	ok := call("Coordinator.GetTask", &args, &reply)
+	if ok {
+		fmt.Printf("reply.Name %s\n", reply.Name)
+	} else {
+		fmt.Printf("call failed!\n")
+	}
+}
+
 // send an RPC request to the coordinator, wait for the response.
 // usually returns true.
 // returns false if something goes wrong.
 func call(rpcname string, args interface{}, reply interface{}) bool {
 	// c, err := rpc.DialHTTP("tcp", "127.0.0.1"+":1234")
+
 	sockname := coordinatorSock()
 	c, err := rpc.DialHTTP("unix", sockname)
+
 	if err != nil {
 		log.Fatal("dialing:", err)
 	}
