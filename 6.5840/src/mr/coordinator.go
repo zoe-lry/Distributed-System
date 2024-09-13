@@ -10,18 +10,27 @@ import (
 )
 
 type Task struct {
-	name string
+	fileName string
 }
 
 type Coordinator struct {
 	// Your definitions here.
-	task Task
+	tasks []Task
+	i int
+	size int
+
 }
 
 // Your code here -- RPC handlers for the worker to call.
 func (c *Coordinator) GetTask(args *TaskRequest, reply *TaskResponse) error {
-	reply.Name = c.task.name
-	fmt.Printf("reply.Name %s\n", reply.Name)
+	if (c.Done()) {
+		return fmt.Errorf("no more tasks available, all tasks are completed")
+	}
+	// Otherwise, assign the next available task
+	reply.FileName = c.tasks[c.i].fileName
+	// Move to the next task
+	c.i ++
+	// fmt.Printf("reply.Name %s\n", reply.Name)
 	return nil
 }
 
@@ -33,7 +42,6 @@ func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
 	reply.Y = args.X + 100
 	return nil
 }
-
 
 //
 // start a thread that listens for RPCs from worker.go
@@ -57,8 +65,10 @@ func (c *Coordinator) server() {
 //
 func (c *Coordinator) Done() bool {
 	ret := false
-
 	// Your code here.
+	if (c.size == c.i) {
+		ret = true
+	}
 	return ret
 }
 
@@ -68,10 +78,16 @@ func (c *Coordinator) Done() bool {
 // nReduce is the number of reduce tasks to use.
 //
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
-	c := Coordinator{task: Task {name: "Hello"}}
-
 	// Your code here.
-
+	c := Coordinator{
+		tasks: []Task{},
+		i:		0,
+		size: len(files)}
+	
+	for _, filename:= range files {
+		task := Task{fileName: filename}
+		c.tasks = append(c.tasks, task)
+	}
 
 	c.server()
 	return &c

@@ -6,8 +6,10 @@ package mr
 // remember to capitalize all names.
 //
 
-import "os"
-import "strconv"
+import (
+	"os"
+	"strconv"
+)
 
 //
 // example to show how to declare the arguments
@@ -28,7 +30,7 @@ type TaskRequest struct {
 }
 
 type TaskResponse struct {
-	Name string
+	FileName string
 }
 
 // Cook up a unique-ish UNIX-domain socket name

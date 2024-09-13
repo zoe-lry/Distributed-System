@@ -3,8 +3,10 @@ package mr
 import (
 	"fmt"
 	"hash/fnv"
+	"io/ioutil"
 	"log"
 	"net/rpc"
+	"os"
 )
 
 // Map functions return a slice of KeyValue.
@@ -26,7 +28,10 @@ func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	// Your worker implementation here.
-	CallGetTask()
+	// Get the filename by calling the CallGetTask
+	filename := CallGetTask()
+	fmt.Printf("file Name %s\n", filename)
+	CallMap(mapf, filename)
 	// uncomment to send the Example RPC to the coordinator.
 	// CallExample()
 
@@ -62,24 +67,48 @@ func CallExample() {
 }
 
 // the RPC argument and reply types are defined in rpc.go.
-func CallGetTask() {
+func CallGetTask() string {
 
 	// declare an argument structure.
 	args := TaskRequest{}
 
-	// declare a reply structure.ç
+	// declare a reply structure.
 	reply := TaskResponse{}
 
 	// send the RPC request, wait for the reply.
-	// the "Coordinator.Example" tells the
+	// the "Coordinator.GetTask" tells the
 	// receiving server that we'd like to call
-	// the Example() method of struct Coordinator.
+	// the GetTask() method of struct Coordinator.
 	ok := call("Coordinator.GetTask", &args, &reply)
 	if ok {
-		fmt.Printf("reply.Name %s\n", reply.Name)
+		fmt.Printf("reply.Name %s\n", reply.FileName)
+		return reply.FileName
 	} else {
 		fmt.Printf("call failed!\n")
+		return ""
 	}
+}
+
+func CallMap(mapf func(string, string) []KeyValue, filename string, ) *[]KeyValue{
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Fatalf("cannot open %v", filename)
+	}
+	content, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatalf("cannot read %v", filename)
+	}
+	file.Close()
+    // Call the map function
+    kva := mapf(filename, string(content))
+
+    // // Print the contents of kva (slice of KeyValue structs)
+    // for _, kv := range kva {
+    //     fmt.Printf("Key: %s, Value: %s\n", kv.Key, kv.Value)
+    // }
+
+    // Return the kva slice if needed
+    return &kva
 }
 
 // send an RPC request to the coordinator, wait for the response.
