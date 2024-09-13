@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/rpc"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -17,6 +18,14 @@ type KeyValue struct {
 	Key   string
 	Value string
 }
+
+// for sorting by key.
+type ByKey []KeyValue
+
+// for sorting by key.
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 // use ihash(key) % NReduce to choose the reduce
 // task number for each KeyValue emitted by Map.
@@ -41,19 +50,24 @@ func Worker(mapf func(string, string) []KeyValue,
 		// the GetTask() method of struct Coordinator.
 		CallGetTask(&request, &reply)
 
-		if reply.Status == 0 { 	// if the status is map
+		if reply.Status == 0 { 	//process Map
 			// Get the filename by calling the CallGetTask
 			kva := CallMap(mapf, reply.FileName, reply.NReduce)
 			// split the Map into nReduce tasks
 			ok := WriteMapOutput(kva, reply.TaskNumber, reply.NReduce)
 			if ok {
-				// reply.Status = 2
+				// TODO  if the task didnt finish properly, reply to the coordinator?
+				// reply.Status = 2 
 			}
-		} else if (reply.Status ==  1) {
+		} else if (reply.Status ==  1) { // process reduce
+			// Call reduce plugin to complete 
+			 CallReduce(reducef, reply.TaskNumber, reply.NMap)
+
 
 		} else if (reply.Status == 2) {
 
 		}
+		
 		// pass the task status and task number to corrdinator 
 		finishReply := FinishReply{Status: reply.Status, TaskNumber: reply.TaskNumber }
 		finishResponse := FinishResponse{}
@@ -67,9 +81,6 @@ func Worker(mapf func(string, string) []KeyValue,
 
 	}
 	
-
-	// Your worker implementation here.
-
 	// uncomment to send the Example RPC to the coordinator.
 	// CallExample()
 
@@ -104,21 +115,22 @@ func CallExample() {
 	}
 }
 
-// // the RPC argument and reply types are defined in rpc.go.
+// the RPC argument and reply types are defined in rpc.go.
 func CallGetTask(args *TaskRequest, reply *TaskResponse)  {
 	ok := call("Coordinator.GetTask", &args, &reply)
 	if ok {
-		fmt.Printf("reply.Name %s\n", reply.FileName)
+		fmt.Printf("GET TASK --- task type %v, filename %s\n", reply.Status, reply.FileName)
 	} else {
 		fmt.Printf("call failed!\n")
 	}
 	
 }
 
+// Task finished and feed back to coordinator
 func CallFinishTask(reply *FinishReply, response *FinishResponse)  {
 	ok := call("Coordinator.FinishTask", &reply, &response)
 	if ok {
-		fmt.Printf("finish task call --- status: %v\n", reply.Status)
+		fmt.Printf("FINISHED --- task type %v, TaskNumber %v\n", reply.Status, reply.TaskNumber)
 	} else {
 		fmt.Printf("call failed!\n")
 	}
@@ -158,13 +170,13 @@ func WriteMapOutput(kva []KeyValue, taskNumber int, nReduce int) bool {
 		// To ensure that nobody observes partially written files in the presence of crashes
 		tmpMapOutFile, error := os.CreateTemp("", "mr-map-*")
 		if error != nil {
-			log.Fatalf("Fail to open tmpMapOutFile.")
+			log.Fatalf("Fail to open tmpMapOutFile: %v", error)
 		}
 		// encode the kv_pair to the temp file
 		enc := json.NewEncoder(tmpMapOutFile)
 		err := enc.Encode(kv_pairs)
 		if err != nil {
-			log.Fatalf("Fail to encode tmpMapOutFile.")
+			log.Fatalf("Fail to encode tmpMapOutFile: %v", err)
 			return false
 		}
 		tmpMapOutFile.Close()
@@ -172,6 +184,56 @@ func WriteMapOutput(kva []KeyValue, taskNumber int, nReduce int) bool {
 	}
 	return true
 }
+
+func CallReduce(reducef func(string, []string) string,taskNumber int , nMap int) {
+	intermediate := []KeyValue{}
+	// read each file mr-mapnumber-tasknumber and reduce
+	for i := 0; i < nMap; i++ {
+		reduceFilename := "mr-" + strconv.Itoa(i) + "-" + strconv.Itoa(taskNumber)
+		file, err := os.OpenFile(reduceFilename, os.O_RDONLY, 0777)
+		if err != nil {
+			log.Fatalf("cannot open reduce task file name: %v", reduceFilename)
+		}
+		dec := json.NewDecoder(file)
+		for{
+			var kv []KeyValue
+			if err := dec.Decode(&kv); err != nil {
+				break
+			}
+			intermediate = append(intermediate, kv...)
+		}
+		file.Close()
+	}
+
+	// Sort the key value pair
+	sort.Sort(ByKey(intermediate))
+	outFilename := "mr-out-" + strconv.Itoa(taskNumber)
+	tmpOutFilename, _ := os.Create(outFilename)
+
+	// call Reduce on each distinct key in intermediate[],
+	// and print the result to mr-out-0.
+	i := 0
+	for i < len(intermediate) {
+		j := i + 1
+		for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
+			j++
+		}
+		values := []string{}
+		for k := i; k < j; k++ {
+			values = append(values, intermediate[k].Value)
+		}
+		output := reducef(intermediate[i].Key, values)
+
+		// this is the correct format for each line of Reduce output.
+		fmt.Fprintf(tmpOutFilename, "%v %v\n", intermediate[i].Key, output)
+		i = j
+	}
+
+	tmpOutFilename.Close()
+	os.Rename(tmpOutFilename.Name(), outFilename) // Rename the file 
+
+}
+
 
 // send an RPC request to the coordinator, wait for the response.
 // usually returns true.

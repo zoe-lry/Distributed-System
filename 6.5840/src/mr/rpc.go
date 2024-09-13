@@ -35,6 +35,8 @@ type TaskResponse struct {
 	TaskNumber int
 	Status int // 0-map 1-reduce 2 no task
 	NReduce int
+	NMap int
+	MachineId int
 }
 
 // when worker finished one task, send a reply to coordinator

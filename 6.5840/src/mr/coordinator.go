@@ -31,9 +31,9 @@ type Coordinator struct {
 
 // Your code here -- RPC handlers for the worker to call.
 func (c *Coordinator) GetTask(args *TaskRequest, reply *TaskResponse) error {
-	if (c.Done()) {
-		return fmt.Errorf("no more tasks available, all tasks are completed")
-	}
+	// if (c.Done()) {
+	// 	return fmt.Errorf("no more tasks available, all tasks are completed")
+	// }
 	// if state == 0, assign map task
 	if c.Status == 0 {
 		for taskNumber, task := range(c.MapTasks) {
@@ -41,8 +41,19 @@ func (c *Coordinator) GetTask(args *TaskRequest, reply *TaskResponse) error {
 				reply.FileName = task.FileName
 				reply.TaskNumber = taskNumber
 				reply.NReduce = c.NReduce
-				reply.Status = 0 // map
+				reply.Status = 0 // 0 - Map task
 				task.Status = 1 // start Running
+				break
+			}
+		}
+	}else if c.Status == 1 {
+		for taskNumber, task := range(c.ReduceTasks) {
+			if (task.Status == 0){
+				reply.FileName = task.FileName
+				reply.TaskNumber = taskNumber
+				reply.NMap = c.NMap
+				reply.Status = 1 	// 1- Reduce task
+				task.Status = 1 	// start Running
 				break
 			}
 		}
@@ -54,7 +65,7 @@ func (c *Coordinator) GetTask(args *TaskRequest, reply *TaskResponse) error {
 //  worker finished one task
 func (c *Coordinator) FinishTask(reply *FinishReply, response *FinishResponse) error {
 	c.Mu.Lock()
-	response.Status = 0
+	response.Status = 1
 	if (reply.Status == 0) { // map
 		c.MapTasks[reply.TaskNumber].Status = 2
 		c.UpdateStatus()
@@ -65,7 +76,7 @@ func (c *Coordinator) FinishTask(reply *FinishReply, response *FinishResponse) e
 			response.Status = 2
 		}
 	}
-	
+
 	c.Mu.Unlock()
 	return nil
 }
@@ -80,6 +91,8 @@ func (c *Coordinator) UpdateStatus() {
 			}
 		}
 		c.Status = 1
+		fmt.Printf(" ----- c.Status CHANGE: %v ----", c.Status)
+		return
 	} else if (c.Status == 1) {
 		for _, task := range(c.ReduceTasks) {
 			if (task.Status == 0 || task.Status == 1){
