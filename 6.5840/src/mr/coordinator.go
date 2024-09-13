@@ -7,11 +7,12 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"sync"
 )
 
 type Task struct {
 	FileName string
-	State int // 0-start 1-running 2-end
+	Status int // 0-start 1-running 2-end
 	Runtime int // Time of running
 	MachineId int 
 
@@ -19,13 +20,13 @@ type Task struct {
 
 type Coordinator struct {
 	// Your definitions here.
-	State int 	// track the task type 0-Map & 1-Reduce 2-Done
+	Status int 	// track the task type 0-Map & 1-Reduce 2-Done
 	MapTasks map[int]*Task
 	ReduceTasks map[int]*Task
 	MachineNum int
 	NMap int	// 最大并行map的个数， 哈希的个数
 	NReduce int // 最大并行的reduce的个数，哈希的个数
-
+	Mu sync.Mutex //只能有一个worker访问
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -34,13 +35,14 @@ func (c *Coordinator) GetTask(args *TaskRequest, reply *TaskResponse) error {
 		return fmt.Errorf("no more tasks available, all tasks are completed")
 	}
 	// if state == 0, assign map task
-	if c.State == 0 {
+	if c.Status == 0 {
 		for taskNumber, task := range(c.MapTasks) {
-			if (task.State == 0){
+			if (task.Status == 0){
 				reply.FileName = task.FileName
 				reply.TaskNumber = taskNumber
 				reply.NReduce = c.NReduce
 				reply.Status = 0 // map
+				task.Status = 1 // start Running
 				break
 			}
 		}
@@ -48,6 +50,49 @@ func (c *Coordinator) GetTask(args *TaskRequest, reply *TaskResponse) error {
 	// fmt.Printf("reply.Name %s\n", reply.Name)
 	return nil
 }
+
+//  worker finished one task
+func (c *Coordinator) FinishTask(reply *FinishReply, response *FinishResponse) error {
+	c.Mu.Lock()
+	response.Status = 0
+	if (reply.Status == 0) { // map
+		c.MapTasks[reply.TaskNumber].Status = 2
+		c.UpdateStatus()
+	} else if (reply.Status == 1) { // reduce
+		c.ReduceTasks[reply.TaskNumber].Status = 2
+		c.UpdateStatus()
+		if c.Status == 2 {
+			response.Status = 2
+		}
+	}
+	
+	c.Mu.Unlock()
+	return nil
+}
+
+// Check Status. switch tasks status
+func (c *Coordinator) UpdateStatus() {
+	if (c.Status == 0) {
+		for _, task := range(c.MapTasks) {
+			if (task.Status == 0 || task.Status == 1){
+				c.Status = 0
+				return
+			}
+		}
+		c.Status = 1
+	} else if (c.Status == 1) {
+		for _, task := range(c.ReduceTasks) {
+			if (task.Status == 0 || task.Status == 1){
+				c.Status = 1
+				return
+			}
+		}
+	} 
+	c.Status = 2
+
+}
+
+
 
 // an example RPC handler.
 //
@@ -82,7 +127,7 @@ func (c *Coordinator) Done() bool {
 	ret := false
 	// Your code here.
 	// if the state == 2 means all tasks done
-	if (c.State == 2) {
+	if (c.Status == 2) {
 		ret = true
 	}
 	return ret
@@ -96,7 +141,7 @@ func (c *Coordinator) Done() bool {
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	// Your code here.
 	c := Coordinator{
-		State : 0,
+		Status : 0,
 		MapTasks: make(map[int]*Task),
 		ReduceTasks: make(map[int]*Task),
 		MachineNum: 0,
@@ -105,11 +150,11 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	}
 	// put the file names into MapTasks
 	for i, filename:= range files {
-		c.MapTasks[i] = &Task{FileName: filename, State: 0, Runtime: 0, MachineId: 0}
+		c.MapTasks[i] = &Task{FileName: filename, Status: 0, Runtime: 0, MachineId: 0}
 	}
 	// create nReduce number of reduceTasks
 	for i:=0; i < nReduce; i++ {
-		c.ReduceTasks[i] = &Task{FileName: "", State: 0, Runtime: 0, MachineId: 0}
+		c.ReduceTasks[i] = &Task{FileName: "", Status: 0, Runtime: 0, MachineId: 0}
 	}
 
 	c.server()

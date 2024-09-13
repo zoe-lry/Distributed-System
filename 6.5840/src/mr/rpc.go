@@ -37,6 +37,18 @@ type TaskResponse struct {
 	NReduce int
 }
 
+// when worker finished one task, send a reply to coordinator
+type FinishReply struct {
+	TaskNumber int
+	Status int
+}
+
+// Coordination reply the status to worker.
+
+type FinishResponse struct {
+	Status int // 1-processing 2-finished
+}
+
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
 // Can't use the current directory since

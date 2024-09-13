@@ -9,6 +9,7 @@ import (
 	"net/rpc"
 	"os"
 	"strconv"
+	"time"
 )
 
 // Map functions return a slice of KeyValue.
@@ -28,23 +29,40 @@ func ihash(key string) int {
 // main/mrworker.go calls this function.
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
-	
-	args := TaskRequest{} // declare an argument structure.
-	reply := TaskResponse{} // declare a reply structure.
+	for {
+		// sleep one second before calling each task
+		time.Sleep(time.Second)
+		request := TaskRequest{} // declare an argument structure.
+		reply := TaskResponse{} // declare a reply structure.
 
-	// send the RPC request, wait for the reply.
-	// the "Coordinator.GetTask" tells the
-	// receiving server that we'd like to call
-	// the GetTask() method of struct Coordinator.
-	CallGetTask(&args, &reply)
+		// send the RPC request, wait for the reply.
+		// the "Coordinator.GetTask" tells the
+		// receiving server that we'd like to call
+		// the GetTask() method of struct Coordinator.
+		CallGetTask(&request, &reply)
 
-	if reply.Status == 0 { 	// if the status is map
-		// Get the filename by calling the CallGetTask
-		kva := CallMap(mapf, reply.FileName, reply.NReduce)
-		// split the Map into nReduce tasks
-		ok := WriteMapOutput(kva, reply.TaskNumber, reply.NReduce)
-		if ok {
-			reply.Status = 2
+		if reply.Status == 0 { 	// if the status is map
+			// Get the filename by calling the CallGetTask
+			kva := CallMap(mapf, reply.FileName, reply.NReduce)
+			// split the Map into nReduce tasks
+			ok := WriteMapOutput(kva, reply.TaskNumber, reply.NReduce)
+			if ok {
+				// reply.Status = 2
+			}
+		} else if (reply.Status ==  1) {
+
+		} else if (reply.Status == 2) {
+
+		}
+		// pass the task status and task number to corrdinator 
+		finishReply := FinishReply{Status: reply.Status, TaskNumber: reply.TaskNumber }
+		finishResponse := FinishResponse{}
+		// call FinishTask in coordinator
+		CallFinishTask(&finishReply, &finishResponse)
+		// get the overall status. if all tasks are done. break the loop
+		// otherwise call another task
+		if finishReply.Status == 2 {
+			break
 		}
 
 	}
@@ -97,6 +115,15 @@ func CallGetTask(args *TaskRequest, reply *TaskResponse)  {
 	
 }
 
+func CallFinishTask(reply *FinishReply, response *FinishResponse)  {
+	ok := call("Coordinator.FinishTask", &reply, &response)
+	if ok {
+		fmt.Printf("finish task call --- status: %v\n", reply.Status)
+	} else {
+		fmt.Printf("call failed!\n")
+	}
+	
+}
 // read the file and turn into keyValue slice
 func CallMap(mapf func(string, string) []KeyValue, filename string, nReduce int) []KeyValue{
 	file, err := os.Open(filename)
