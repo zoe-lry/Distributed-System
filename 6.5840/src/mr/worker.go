@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/rpc"
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -49,7 +51,9 @@ func Worker(mapf func(string, string) []KeyValue,
 		// the "Coordinator.GetTask" tells the
 		// receiving server that we'd like to call
 		// the GetTask() method of struct Coordinator.
-		CallGetTask(&request, &response)
+		if !CallGetTask(&request, &response) {
+			break
+		}
 		machineId = response.MachineId
 
 		if response.Status == 0 { 	//process Map
@@ -112,26 +116,15 @@ func CallExample() {
 }
 
 // the RPC argument and reply types are defined in rpc.go.
-func CallGetTask(request *TaskRequest, response *TaskResponse)  {
-	call("Coordinator.GetTask", &request, &response)
-	// ok := call("Coordinator.GetTask", &request, &response)
-	// if ok {
-	// 	fmt.Printf("GET TASK ---Machine ID: %v,  task type %v, filename %s\n", response.MachineId, response.Status, response.FileName)
-	// } else {
-	// 	fmt.Printf("call failed!\n")
-	// }
+func CallGetTask(request *TaskRequest, response *TaskResponse) bool {
+	ok := call("Coordinator.GetTask", &request, &response)
+	return ok
 	
 }
 
 // Task finished and feed back to coordinator
 func CallFinishTask(request *FinishRequest, response *FinishResponse)  {
 	call("Coordinator.FinishTask", &request, &response)
-	// ok := call("Coordinator.FinishTask", &request, &response)
-	// if ok {
-	// 	fmt.Printf("FINISHED --- task type %v, TaskNumber %v\n", request.Status, request.TaskNumber)
-	// } else {
-	// 	fmt.Printf("call failed!\n")
-	// }
 }
 // read the file and turn into keyValue slice
 func CallMap(mapf func(string, string) []KeyValue, filename string, nReduce int) []KeyValue{
@@ -242,7 +235,8 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 	c, err := rpc.DialHTTP("unix", sockname)
 
 	if err != nil {
-		log.Fatal("dialing:", err)
+		// log.Fatal("dialing:", err)
+		return false
 	}
 	defer c.Close()
 
@@ -250,7 +244,10 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 	if err == nil {
 		return true
 	}
-
-	fmt.Println(err)
+    // Suppress logging for expected EOF errors
+    if err == io.EOF || strings.Contains(err.Error(), "connection refused") {
+        return false
+    }
+	// fmt.Println(err)
 	return false
 }

@@ -70,7 +70,6 @@ func (c *Coordinator) GetTask(request *TaskRequest, response *TaskResponse) erro
 	} else {
 		response.MachineId = request.MachineId
 	}
-	// fmt.Printf("c.Status: %v, Machine Number: % v \n", c.Status, response.MachineId)
 	if c.Status == 0 {
 		for taskNumber, task := range(c.MapTasks) {
 			if (task.Status == 0){

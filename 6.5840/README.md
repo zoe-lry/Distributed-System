@@ -1,3 +1,64 @@
+# Useage
+## Run test
+- go to main
+  ```
+  cd src/main
+  ```
+- Build the plugin
+    ```
+    go build -buildmode=plugin ../mrapps/wc.go
+    ```
+- run test
+  ```angular2html
+  bash test-mr.sh 
+    ```
+Output of the test sould be:
+  ```
+    zoeli@zoedeMacBook-Pro main % go build -buildmode=plugin ../mrapps/wc.go
+    zoeli@zoedeMacBook-Pro main % bash test-mr.sh                           
+    *** Cannot find timeout command; proceeding without timeouts.
+    *** Starting wc test.
+    --- wc test: PASS
+    *** Starting indexer test.
+    --- indexer test: PASS
+    *** Starting map parallelism test.
+    --- map parallelism test: PASS
+    *** Starting reduce parallelism test.
+    --- reduce parallelism test: PASS
+    *** Starting job count test.
+    --- job count test: PASS
+    *** Starting early exit test.
+    --- early exit test: PASS
+    *** Starting crash test.
+    --- crash test: PASS
+    *** PASSED ALL TESTS
+  ```
+
+## Run simulating the coordinator and workers
+- go to main
+  ```
+  cd src/main
+  ```
+- Build the plugin
+    ```
+    go build -buildmode=plugin ../mrapps/wc.go
+    ```
+- run `mrcoordinator.go`;
+    ```angular2html
+    go run mrcoordinator.go pg-*.txt
+    ```
+- open different terminals and run multiple `mrworker.go`; 
+    ```angular2html
+    cd src/main
+    go run mrworker.go wc.so
+    ```
+
+## Reference
+- 《Distributed Systems》(6.824)LAB1(mapreduce)                 
+原文链接：https://blog.csdn.net/weixin_44520881/article/details/109641515
+https://blog.csdn.net/weixin_44520881/article/details/109641515?spm=1001.2014.3001.5501
+
+- 
 # 1. Introduction to Implementing own MapReduce
 
 ## 1.1 Try Sample use
@@ -165,3 +226,30 @@ reply.Y 100
 ## 2.1 Task 1 -- Modify `Worker()` to send an RPC to Coordinatior
 One way to get started is to modify `mr/worker.go`'s `Worker()` to send an RPC to the coordinator asking for a task.
 -   Create a `Task` and a `Reply` struct in `rpc.go`
+## 2.2 Add WriteMapOutput method 
+to distribute the keyvalue pair to each reduce task and write into files named `rm-X-Y` where X is the Map task number, and Y is the reduce task number.
+Y = hash(key) % nReduce. 
+
+Hint: The map part of your worker can use the `ihash(key)` function (in `worker.go`) to pick the reduce task for a given key.
+
+## 2.3 Adding reponse from Worker to Coordinator.
+While the Worker finished one task, call `FinishTask` in the coordinator to inform it. and the coordinate would update the overall status and check if the current stage has been completes.
+
+e.g. 
+if all map tasks are completeded then switch to reduce tasks; 
+
+or if all reduce tasks have completed. then close the Coordinator
+
+## 2.4 Adding Reduce haldler in Worker.go
+After the Map tasks complete, start the reduce tasks.
+
+Coordinator assigns reduce task to worker (use `status` to identify if a given task is map or reduce)
+
+worker receive a reduce task and CallReduce method.
+it will read the file name `out-X-Y` where Y is assigned by `Coordinator` and X is the loop from 0 to NMap (the number of files).
+
+## 2.5 Adding Machine Number distribute
+Keep tracking the number of Worker
+
+## 2.6 Adding TimeTick()
+to monitor if the machines are running properly. If it runout of time (10 seconds in this case). return the status to 0 and reassign the task to the next machine.
