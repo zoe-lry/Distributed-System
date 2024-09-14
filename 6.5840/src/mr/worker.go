@@ -41,7 +41,7 @@ func Worker(mapf func(string, string) []KeyValue,
 	machineId := 0
 	for {
 		// sleep one second before calling each task
-		time.Sleep(time.Second)
+		// time.Sleep(2* time.Second)
 		request := TaskRequest{MachineId: machineId} // declare an argument structure.
 		response := TaskResponse{} // declare a reply structure.
 
@@ -56,35 +56,30 @@ func Worker(mapf func(string, string) []KeyValue,
 			// Get the filename by calling the CallGetTask
 			kva := CallMap(mapf, response.FileName, response.NReduce)
 			// split the Map into nReduce tasks
-			ok := WriteMapOutput(kva, response.TaskNumber, response.NReduce)
-			if ok {
-				// TODO  if the task didnt finish properly, reply to the coordinator?
-				// reply.Status = 2 
-			}
+			WriteMapOutput(kva, response.TaskNumber, response.NReduce)
+
 		} else if (response.Status ==  1) { // process reduce
 			// Call reduce plugin to complete 
 			 CallReduce(reducef, response.TaskNumber, response.NMap)
 
 
-		} else if (response.Status == 2) {
-
+		} else if (response.Status == 2) { 
+			//轮空，map还未完成，需要等其他worker运行完
+			continue
 		}
 		
 		// pass the task status and task number to corrdinator 
-		finishRquest := FinishReply{Status: response.Status, TaskNumber: response.TaskNumber }
+		finishRquest := FinishRequest{Status: response.Status, TaskNumber: response.TaskNumber }
 		finishResponse := FinishResponse{}
 		// call FinishTask in coordinator
 		CallFinishTask(&finishRquest, &finishResponse)
 		// get the overall status. if all tasks are done. break the loop
 		// otherwise call another task
-		if finishRquest.Status == 2 {
+		if finishResponse.Status == 2 {
+			time.Sleep(2 * time.Second)
 			break
 		}
 	}
-	
-	// uncomment to send the Example RPC to the coordinator.
-	// CallExample()
-
 }
 
 
@@ -118,24 +113,25 @@ func CallExample() {
 
 // the RPC argument and reply types are defined in rpc.go.
 func CallGetTask(request *TaskRequest, response *TaskResponse)  {
-	ok := call("Coordinator.GetTask", &request, &response)
-	if ok {
-		fmt.Printf("GET TASK ---Machine ID: %v,  task type %v, filename %s\n", response.MachineId, response.Status, response.FileName)
-	} else {
-		fmt.Printf("call failed!\n")
-	}
+	call("Coordinator.GetTask", &request, &response)
+	// ok := call("Coordinator.GetTask", &request, &response)
+	// if ok {
+	// 	fmt.Printf("GET TASK ---Machine ID: %v,  task type %v, filename %s\n", response.MachineId, response.Status, response.FileName)
+	// } else {
+	// 	fmt.Printf("call failed!\n")
+	// }
 	
 }
 
 // Task finished and feed back to coordinator
-func CallFinishTask(reply *FinishReply, response *FinishResponse)  {
-	ok := call("Coordinator.FinishTask", &reply, &response)
-	if ok {
-		fmt.Printf("FINISHED --- task type %v, TaskNumber %v\n", reply.Status, reply.TaskNumber)
-	} else {
-		fmt.Printf("call failed!\n")
-	}
-	
+func CallFinishTask(request *FinishRequest, response *FinishResponse)  {
+	call("Coordinator.FinishTask", &request, &response)
+	// ok := call("Coordinator.FinishTask", &request, &response)
+	// if ok {
+	// 	fmt.Printf("FINISHED --- task type %v, TaskNumber %v\n", request.Status, request.TaskNumber)
+	// } else {
+	// 	fmt.Printf("call failed!\n")
+	// }
 }
 // read the file and turn into keyValue slice
 func CallMap(mapf func(string, string) []KeyValue, filename string, nReduce int) []KeyValue{

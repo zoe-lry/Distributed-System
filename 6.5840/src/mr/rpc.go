@@ -40,7 +40,7 @@ type TaskResponse struct {
 }
 
 // when worker finished one task, send a reply to coordinator
-type FinishReply struct {
+type FinishRequest struct {
 	TaskNumber int
 	Status int
 }
