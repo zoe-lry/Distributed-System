@@ -1,4 +1,4 @@
-# Useage
+# Usage
 ## Run test
 - go to main
   ```
