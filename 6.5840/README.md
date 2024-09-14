@@ -54,6 +54,8 @@ Output of the test sould be:
     ```
 
 ## Reference
+- Lab1 Instructions
+  https://pdos.csail.mit.edu/6.824/labs/lab-mr.html
 - 《Distributed Systems》(6.824)LAB1(mapreduce)                 
 原文链接：https://blog.csdn.net/weixin_44520881/article/details/109641515
 https://blog.csdn.net/weixin_44520881/article/details/109641515?spm=1001.2014.3001.5501
