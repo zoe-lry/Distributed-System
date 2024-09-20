@@ -67,15 +67,47 @@ https://blog.csdn.net/weixin_44520881/article/details/109641515?spm=1001.2014.30
 
 # Lab2 Key/Value server
 
-https://pdos.csail.mit.edu/6.824/labs/lab-kvsrv.html
+- Lab instruction: https://pdos.csail.mit.edu/6.824/labs/lab-kvsrv.html
+- reference: https://blog.csdn.net/hzf0701/article/details/138904641
 
 ## run test
   ```
   cd src/kvsrv
   go test
   ```
+## result
+```
+Test: one client ...
+labgob warning: Decoding into a non-default variable/field Value may not work
+  ... Passed -- t  4.2 nrpc 59810 ops 39848
+Test: many clients ...
+  ... Passed -- t  5.8 nrpc 190024 ops 126734
+Test: unreliable net, many clients ...
+  ... Passed -- t  3.3 nrpc  1170 ops  636
+Test: concurrent append to same key, unreliable ...
+  ... Passed -- t  0.4 nrpc   130 ops   52
+Test: memory use get ...
+  ... Passed -- t  0.4 nrpc     6 ops    0
+Test: memory use put ...
+  ... Passed -- t  0.1 nrpc     4 ops    0
+Test: memory use append ...
+  ... Passed -- t  0.2 nrpc     4 ops    0
+Test: memory use many put clients ...
+  ... Passed -- t 10.8 nrpc 200000 ops    0
+Test: memory use many get client ...
+  ... Passed -- t  7.6 nrpc 100002 ops    0
+Test: memory use many appends ...
+2024/09/19 21:09:07 m0 579288 m1 1592632
+  ... Passed -- t  1.3 nrpc  2000 ops    0
+PASS
+ok      6.5840/kvsrv    35.694s
+```
 
-# Lab2. Key Value server
+
+
+
+
+# Lab2. Key Value server Implementation
 ## Task 1 Key/value server with no network failures
 - Your first task is to implement a solution that works when there are no dropped messages.
 - You'll need to add RPC-sending code to the `Clerk` `Put/Append/Get` methods in `client.go`, and implement `Put`, `Append()` and `Get()` RPC handlers in server.go.

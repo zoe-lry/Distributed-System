@@ -1,8 +1,11 @@
 package kvsrv
 
-import "6.5840/labrpc"
-import "crypto/rand"
-import "math/big"
+import (
+	"crypto/rand"
+	"math/big"
+
+	"6.5840/labrpc"
+)
 
 
 type Clerk struct {
@@ -41,7 +44,8 @@ func (ck *Clerk) Get(key string) string {
 		Key : key,
 		};
 	reply := &GetReply{};
-	ck.server.Call("KVServer.Get", args, reply);
+	for !ck.server.Call("KVServer.Get", args, reply){
+	} // keep trying
 	return reply.Value;
 }
 
@@ -58,10 +62,15 @@ func (ck *Clerk) PutAppend(key string, value string, op string) string {
 	args := &PutAppendArgs{
 		Key: key,
 		Value: value,
+		MessageType: 0,
+		Id: nrand(),
 		};
 	reply := &PutAppendReply{};
-	ck.server.Call("KVServer." + op, args, reply);
-	return reply.Value;
+	for !ck.server.Call("KVServer." + op, args, reply){}
+	res := reply.Value
+	args.MessageType = 1;
+	for !ck.server.Call("KVServer." + op, args, reply){}
+	return res;
 }
 
 func (ck *Clerk) Put(key string, value string) {
