@@ -1,4 +1,5 @@
 # Usage
+# Lab1 MapReduce
 ## Run test
 - go to main
   ```
@@ -60,8 +61,45 @@ Output of the test sould be:
 原文链接：https://blog.csdn.net/weixin_44520881/article/details/109641515
 https://blog.csdn.net/weixin_44520881/article/details/109641515?spm=1001.2014.3001.5501
 
-- 
-# 1. Introduction to Implementing own MapReduce
+
+###############################################
+
+
+# Lab2 Key/Value server
+
+https://pdos.csail.mit.edu/6.824/labs/lab-kvsrv.html
+
+## run test
+  ```
+  cd src/kvsrv
+  go test
+  ```
+
+# Lab2. Key Value server
+## Task 1 Key/value server with no network failures
+- Your first task is to implement a solution that works when there are no dropped messages.
+- You'll need to add RPC-sending code to the `Clerk` `Put/Append/Get` methods in `client.go`, and implement `Put`, `Append()` and `Get()` RPC handlers in server.go.
+- You have completed this task when you pass the first two tests in the test suite: "one client" and "many clients".
+
+## Task 2 Key/value server with dropped messages
+- Add code to `Clerk` to retry if doesn't receive a reply, and to `server.go` to filter duplicates if the operation requires it.
+
+Now you should modify your solution to continue in the face of dropped messages (e.g., RPC requests and RPC replies). 
+If a message was lost, then the client's `ck.server.Call()` will return false (more precisely, `Call()` waits for a reply message for a timeout interval, and returns false if no reply arrives within that time). One problem you'll face is that a Clerk may have to send an RPC multiple times until it succeeds. Each call to `Clerk.Put()` or `Clerk.Append()`, however, should result in just a single execution, so you will have to ensure that the re-send doesn't result in the server executing the request twice.
+
+### hints
+- You will need to `uniquely identify client operations` to ensure that the key/value server executes each one just once.
+- You will have to think carefully about what state the server must maintain for handling duplicate `Get()`, `Put()`, and `Append()` requests, if any at all.
+- Your scheme for duplicate detection should free server memory quickly, for example by having each RPC imply that the client has seen the reply for its previous RPC. It's OK to assume that a client will make only one call into a Clerk at a time.
+
+## design
+- add a identification id for `Put` and `Append` requests. Add a `sync.Map` to record the handled requests to ensure each request execute just once. If one request has been handled, return the recorded result.
+- to free the server memory. once the client received reply, send a notification to the server so that the server can delete the memory. add a `Type` field in the `Message` to record the status `modify` or `report`.
+
+
+###############################################
+
+# Lab1. Introduction to Implementing own MapReduce
 
 ## 1.1 Try Sample use
 
