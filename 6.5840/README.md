@@ -104,6 +104,21 @@ ok      6.5840/kvsrv    35.694s
 ```
 
 
+# Lab3 Raft
+
+## Run test
+```
+cd src/raft
+go test
+```
+
+# Lab3 A
+```
+cd src/raft
+go test -run 3A
+```
+
+
 
 
 
