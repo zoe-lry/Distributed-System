@@ -158,25 +158,6 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 
 }
 
-
-// example RequestVote RPC arguments structure.
-// field names must start with capital letters!
-type RequestVoteArgs struct {
-	// Your data here (3A, 3B).
-	Term int			// Candidate's term
-	CandidateId int 	// Candidate requesting vote
-	LastLogIndex int 	// index of candidate’s last log entry
-	LastLogTerm int		// term of candidate’s last log entry
-}
-
-// example RequestVote RPC reply structure.
-// field names must start with capital letters!
-type RequestVoteReply struct {
-	// Your data here (3A).
-	Term int		// currentTerm, for candidate to update itself
-	VoteGrand bool	// true means candidate received vote
-}
-
 // example RequestVote RPC handler.
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (3A, 3B).
@@ -185,9 +166,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// or 3. has voted for other candidate
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
+
 	if args.Term < rf.currentTerm {
         reply.Term = rf.currentTerm
-        reply.VoteGrand = false
+        reply.VoteGranded = false
         return
     }
 
@@ -203,10 +185,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
         rf.voteFor = args.CandidateId
         rf.electionTimer.Reset(RandomElectionTimeout())
         reply.Term = rf.currentTerm
-        reply.VoteGrand = true
+        reply.VoteGranded = true
     } else {
         reply.Term = rf.currentTerm
-        reply.VoteGrand = false
+        reply.VoteGranded = false
     }
 
 }
@@ -259,13 +241,16 @@ func (rf *Raft) AppendEntries(args *AppendEntryArgs, reply *AppendEntryReply) {
         reply.Success = false
         return
     }
+    if args.Term > rf.currentTerm {
+        rf.currentTerm = args.Term
+        rf.voteFor = -1
+        rf.persist()
+    }
 
-    rf.currentTerm = args.Term
     rf.ChangeState(Follower)
     rf.electionTimer.Reset(RandomElectionTimeout())
 
-    // Implement log consistency checks here
-    // For 3A tests, it's acceptable to respond positively without log checks
+    // For 3A tests, we don't need to handle log entries
     reply.Term = rf.currentTerm
     reply.Success = true
 }
@@ -352,46 +337,43 @@ func (rf *Raft) ticker() {
 }
 
 func (rf *Raft) StartElection() {
-	arg := RequestVoteArgs{
-		Term: rf.currentTerm,
-		CandidateId: rf.me,
-		LastLogIndex: rf.GetLastLog().Index,
-		LastLogTerm: rf.GetLastLog().Term,
-	}
-	var mu sync.Mutex
-	countVote := 1
-	
-	for peer:= range rf.peers {
-		if peer == rf.me {
-			continue
-		} 
-		go func (peer int) {
-			reply := RequestVoteReply{}
-			if rf.sendRequestVote(peer, &arg, &reply) {
-				rf.mu.Lock()
-				defer rf.mu.Unlock()
-				if arg.Term != rf.currentTerm || rf.state != Candidate {
-					return
-				}					
-				if reply.VoteGrand {
-					mu.Lock()
-					countVote += 1
-					if countVote > len(rf.peers) / 2  && rf.state == Candidate  {
-						rf.ChangeState(Leader)
-						rf.SendHeartbeat(true)
-					}
-					mu.Unlock()
+    rf.persist()
 
-				} else if reply.Term > rf.currentTerm {
-					rf.ChangeState(Follower)
-					rf.currentTerm, rf.voteFor = reply.Term, -1
-					rf.electionTimer.Reset(RandomElectionTimeout())
-				}
-			}
-		}(peer)
-		
-		
-	}
+    arg := RequestVoteArgs{
+        Term:         rf.currentTerm,
+        CandidateId:  rf.me,
+        LastLogIndex: rf.GetLastLog().Index,
+        LastLogTerm:  rf.GetLastLog().Term,
+    }
+    countVote := 1
+    for peer := range rf.peers {
+        if peer == rf.me {
+            continue
+        }
+        go func(peer int) {
+            reply := RequestVoteReply{}
+            if rf.sendRequestVote(peer, &arg, &reply) {
+                rf.mu.Lock()
+                defer rf.mu.Unlock()
+                // if rf.currentTerm != arg.Term || rf.state != Candidate {
+                //     return
+                // }
+                if reply.VoteGranded {
+                    countVote += 1
+                    if countVote > len(rf.peers)/2 && rf.state == Candidate {
+                        rf.ChangeState(Leader)
+                        rf.SendHeartbeat(true)
+                    }
+                } else if reply.Term > rf.currentTerm {
+                    rf.currentTerm = reply.Term
+                    rf.voteFor = -1
+                    rf.ChangeState(Follower)
+                    rf.electionTimer.Reset(RandomElectionTimeout())
+					return
+                }
+            }
+        }(peer)
+    }
 }
 
 func (rf *Raft) SendHeartbeat(isHeartbeat bool) {
@@ -407,8 +389,27 @@ func (rf *Raft) SendHeartbeat(isHeartbeat bool) {
 				PrevLogIndex: rf.GetLastLog().Index,
 				
 			}
-			reply:= AppendEntryReply{}
-			rf.sendAppendEntries(peer, &arg, &reply)
+			// reply:= AppendEntryReply{}
+			// rf.sendAppendEntries(peer, &arg, &reply)
+			go func(peer int, arg AppendEntryArgs) {
+                reply := AppendEntryReply{}
+                if rf.sendAppendEntries(peer, &arg, &reply) {
+                    // rf.mu.Lock()
+                    // defer rf.mu.Unlock()
+                    // // if rf.currentTerm != arg.Term || rf.state != Leader {
+                    // //     return
+                    // // }
+                    // if reply.Term > rf.currentTerm {
+                    //     rf.currentTerm = reply.Term
+                    //     rf.voteFor = -1
+                    //     rf.persist()
+                    //     rf.ChangeState(Follower)
+                    //     rf.electionTimer.Reset(RandomElectionTimeout())
+					// 	return
+                    // }
+                    // You may also handle other cases here as you implement more features
+                }
+            }(peer, arg)
 		} else {
 
 		
