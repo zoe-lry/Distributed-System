@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -8,18 +9,16 @@ import (
 )
 
 // Debugging
-const Debug = false
+const Debug = true
 
-// log entry struct
-type LogEntry struct {
-	Term int
-	Index int
-	Command interface{}
+func DPrintf(format string, a ...interface{}) {
+	if Debug {
+		log.Printf(format, a...)
+	}
 }
 
-// generate random election timeout
 const ElectionTimeout = 1000
-const heartbeaTimeout = 125
+const HeartbeatTimeout = 125
 
 type LockedRand struct {
 	mu   sync.Mutex
@@ -35,31 +34,89 @@ func (r *LockedRand) Intn(n int) int {
 var GlobalRand = &LockedRand{
 	rand: rand.New(rand.NewSource(time.Now().UnixNano())),
 }
-// election timeout
+
 func RandomElectionTimeout() time.Duration {
-	return time.Duration(ElectionTimeout + GlobalRand.Intn(ElectionTimeout)) * time.Millisecond
-}
-// heartbeat timeout
-func RandomHeartbeatTimeout() time.Duration {
-	return time.Duration(heartbeaTimeout) * time.Millisecond
+	return time.Duration(ElectionTimeout+GlobalRand.Intn(ElectionTimeout)) * time.Millisecond
 }
 
-// Server State
-// follower - 0; candidate - 1; leader - 2
-type ServerState uint8
+func StableHeartbeatTimeout() time.Duration {
+	return time.Duration(HeartbeatTimeout) * time.Millisecond
+}
+
+type ApplyMsg struct {
+	// CommandTerm is not necessary because it is already applied to the state machine
+	// since the application layer usually only cares about the order and content of logs
+	CommandValid bool
+	Command      interface{}
+	CommandIndex int
+
+	// For 3D:
+	SnapshotValid bool
+	Snapshot      []byte
+	SnapshotTerm  int
+	SnapshotIndex int
+}
+
+type NodeState uint8
+
 const (
-	Follower ServerState = iota
+	Follower NodeState = iota
 	Candidate
 	Leader
 )
 
-// Get the last log
-func (rf *Raft) GetLastLog() LogEntry{
+func (state NodeState) String() string {
+	switch state {
+	case Follower:
+		return "Follower"
+	case Candidate:
+		return "Candidate"
+	case Leader:
+		return "Leader"
+	}
+	panic("unexpected NodeState")
+}
+
+func (args RequestVoteArgs) String() string {
+	return fmt.Sprintf("{Term:%v, CandidateId:%v, LastLogIndex:%v, LastLogTerm:%v}", args.Term, args.CandidateId, args.LastLogIndex, args.LastLogTerm)
+}
+
+func (reply RequestVoteReply) String() string {
+	return fmt.Sprintf("{Term:%v, VoteGranted:%v}", reply.Term, reply.VoteGranted)
+}
+
+func (args AppendEntriesArgs) String() string {
+	return fmt.Sprintf("{Term:%v, LeaderId:%v, PrevLogIndex:%v, PrevLogTerm:%v, LeaderCommit:%v, Entries:%v}", args.Term, args.LeaderId, args.PrevLogIndex, args.PrevLogTerm, args.LeaderCommit, args.Entries)
+}
+
+func (reply AppendEntriesReply) String() string {
+	return fmt.Sprintf("{Term:%v, Success:%v, ConflictIndex:%v, ConflictTerm:%v}", reply.Term, reply.Success, reply.ConflictIndex, reply.ConflictTerm)
+}
+
+type LogEntry struct {
+	Command interface{}
+	Term    int
+	Index   int
+}
+
+func (rf *Raft) getLastLog() LogEntry {
 	return rf.logs[len(rf.logs)-1]
 }
 
-func DPrintf(format string, a ...interface{}) {
-	if Debug {
-		log.Printf(format, a...)
+func (rf *Raft) getFirstLog() LogEntry {
+	return rf.logs[0]
+}
+
+func Min(a, b int) int {
+	if a < b {
+		return a
 	}
+	return b
+}
+
+func Max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

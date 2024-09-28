@@ -10,6 +10,7 @@ go test
 ```
 cd src/raft
 go test -run 3A
+go test -run 3A -race
 ```
 
 ## Test Result
@@ -23,6 +24,14 @@ Test (3A): multiple elections ...
 PASS
 ok      6.5840/raft     21.627s
 ```
+
+## Test 3B
+```
+cd src/raft
+go test -run 3B
+```
+
+## Test Result
 ## Reference
 https://pdos.csail.mit.edu/6.824/labs/lab-raft.html
 
@@ -55,3 +64,8 @@ https://pdos.csail.mit.edu/6.824/papers/raft-extended.pdf
 
 
 
+# Lab3A Raft Implementation
+
+1. add `applyCh` in the Raft
+    - The service expects your implementation to send an `ApplyMsg` for each newly committed log entry to the `applyCh` channel argument to `Make()`
+2. implement `Start()`
